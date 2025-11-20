@@ -13,7 +13,7 @@ HTML_INTERFACE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMAP AI - Классификация заявок</title>
+    <title>SMAX AI - Классификация заявок</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -175,7 +175,7 @@ HTML_INTERFACE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 SMAP AI</h1>
+            <h1>🤖 SMAX AI</h1>
             <p>Автоматическая классификация заявок</p>
         </div>
         
