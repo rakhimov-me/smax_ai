@@ -290,25 +290,44 @@ HTML_INTERFACE = """
                 const prediction = data.prediction;
                 const resultsDiv = document.getElementById('predictionResults');
                 
-                let confidenceClass = 'low';
-                if (prediction.confidence > 0.7) confidenceClass = 'high';
-                else if (prediction.confidence > 0.4) confidenceClass = 'medium';
-                
-                resultsDiv.innerHTML = `
-                    <div class="result-item">
-                        <strong>👥 Группа:</strong> ${prediction.group}
-                        <span class="confidence ${confidenceClass}">${Math.round(prediction.confidence * 100)}%</span>
-                    </div>
-                    <div class="result-item">
-                        <strong>👨‍💻 Эксперт:</strong> ${prediction.expert}
-                        <span class="confidence ${confidenceClass}">${Math.round(prediction.expert_confidence * 100)}%</span>
-                    </div>
-                    <div class="result-item">
-                        <strong>🏷️ Метка:</strong> ${prediction.label}
-                        <span class="confidence ${confidenceClass}">${Math.round(prediction.label_confidence * 100)}%</span>
-                    </div>
-                    ${prediction.fallback ? '<div style="color: #e74c3c; margin-top: 10px;">⚠️ ' + prediction.message + '</div>' : ''}
-                `;
+                // Проверка на спам
+                if (prediction.is_spam) {
+                    resultsDiv.innerHTML = `
+                        <div style="color: #e74c3c; text-align: center; padding: 20px;">
+                            <h3>🚫 ЗАПРОС ЗАБЛОКИРОВАН</h3>
+                            <p><strong>Причина:</strong> ${prediction.spam_message || prediction.message}</p>
+                            <p>Пожалуйста, опишите вашу проблему более конкретно.</p>
+                        </div>
+                    `;
+                } else if (prediction.fallback) {
+                    // Модель не обучена
+                    resultsDiv.innerHTML = `
+                        <div style="color: #f39c12; text-align: center; padding: 20px;">
+                            <h3>⚠️ МОДЕЛЬ НЕ ОБУЧЕНА</h3>
+                            <p>${prediction.message}</p>
+                        </div>
+                    `;
+                } else {
+                    // Нормальный результат
+                    let confidenceClass = 'low';
+                    if (prediction.confidence > 0.7) confidenceClass = 'high';
+                    else if (prediction.confidence > 0.4) confidenceClass = 'medium';
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="result-item">
+                            <strong>👥 Группа:</strong> ${prediction.group}
+                            <span class="confidence ${confidenceClass}">${Math.round(prediction.confidence * 100)}%</span>
+                        </div>
+                        <div class="result-item">
+                            <strong>👨‍💻 Эксперт:</strong> ${prediction.expert}
+                            <span class="confidence ${confidenceClass}">${Math.round(prediction.expert_confidence * 100)}%</span>
+                        </div>
+                        <div class="result-item">
+                            <strong>🏷️ Метка:</strong> ${prediction.label}
+                            <span class="confidence ${confidenceClass}">${Math.round(prediction.label_confidence * 100)}%</span>
+                        </div>
+                    `;
+                }
                 
                 document.getElementById('results').style.display = 'block';
             } else {

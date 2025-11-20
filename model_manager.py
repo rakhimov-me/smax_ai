@@ -7,6 +7,7 @@ import joblib
 import os
 import glob
 from data_loader import DataLoader
+from spam_protector import SpamProtector  # Добавляем импорт
 
 class ModelManager:
     def __init__(self):
@@ -20,6 +21,7 @@ class ModelManager:
         self.label_classifier = None
         
         self.data_loader = DataLoader()
+        self.spam_protector = SpamProtector()  # Добавляем спам-защиту
         self.is_trained = False
         
     def load_and_train(self, folder_path="Выгрузка"):
@@ -68,7 +70,25 @@ class ModelManager:
             return False
     
     def predict(self, title, description):
-        """Предсказание группы, эксперта и метки"""
+        """Предсказание группы, эксперта и метки с проверкой на спам"""
+        
+        # 1. Проверка на спам перед предсказанием
+        is_spam, spam_message = self.spam_protector.is_spam(title, description)
+        if is_spam:
+            return {
+                "group": "СПАМ-ФИЛЬТР",
+                "expert": "Система защиты",
+                "label": "Заблокировано",
+                "confidence": 0.0,
+                "group_confidence": 0.0,
+                "expert_confidence": 0.0,
+                "label_confidence": 0.0,
+                "is_spam": True,
+                "spam_message": spam_message,
+                "message": "Запрос заблокирован спам-фильтром"
+            }
+        
+        # 2. Проверка, обучена ли модель
         if not self.is_trained:
             return self._fallback_prediction(title, description)
             
@@ -100,7 +120,8 @@ class ModelManager:
                 "confidence": round(confidence, 3),
                 "group_confidence": round(group_confidence, 3),
                 "expert_confidence": round(expert_confidence, 3),
-                "label_confidence": round(label_confidence, 3)
+                "label_confidence": round(label_confidence, 3),
+                "is_spam": False
             }
         except Exception as e:
             print(f"❌ Ошибка предсказания: {e}")
@@ -113,7 +134,11 @@ class ModelManager:
             "expert": "Специалист первой линии",
             "label": "Стандартная заявка",
             "confidence": 0.1,
+            "group_confidence": 0.1,
+            "expert_confidence": 0.1,
+            "label_confidence": 0.1,
             "fallback": True,
+            "is_spam": False,
             "message": "Модель не обучена. Загрузите данные через /load_excel"
         }
     
