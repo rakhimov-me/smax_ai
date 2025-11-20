@@ -325,6 +325,17 @@ HTML_INTERFACE = """
                             <span class="confidence ${confidenceClass}">${Math.round(prediction.label_confidence * 100)}%</span>
                         </div>
                     `;
+
+                    // Проверка на необходимость модерации
+                    if (prediction.needs_moderation) {
+                        resultsDiv.innerHTML += `
+                            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin-top: 15px;">
+                                <h4>⚠️ ТРЕБУЕТСЯ МОДЕРАЦИЯ</h4>
+                                <p><strong>Причина:</strong> ${prediction.moderation_reason}</p>
+                                <p>Эта заявка будет проверена человеком перед назначением.</p>
+                            </div>
+                        `;
+                    }
                 }
                 
                 document.getElementById('results').style.display = 'block';

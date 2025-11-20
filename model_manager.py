@@ -7,7 +7,7 @@ import joblib
 import os
 import glob
 from data_loader import DataLoader
-from spam_protector import SpamProtector  # Добавляем импорт
+from spam_protector import SpamProtector
 
 class ModelManager:
     def __init__(self):
@@ -21,17 +21,15 @@ class ModelManager:
         self.label_classifier = None
         
         self.data_loader = DataLoader()
-        self.spam_protector = SpamProtector()  # Добавляем спам-защиту
+        self.spam_protector = SpamProtector()
         self.is_trained = False
+        self.confidence_threshold = 0.25  # Порог уверенности 25%
         
     def load_and_train(self, folder_path="Выгрузка"):
         """Загрузка данных и обучение модели"""
-        # Загружаем данные
         success = self.data_loader.load_from_excel(folder_path)
         if not success:
             return False
-        
-        # Обучаем модель
         return self._train_model()
     
     def _train_model(self):
@@ -70,7 +68,7 @@ class ModelManager:
             return False
     
     def predict(self, title, description):
-        """Предсказание группы, эксперта и метки с проверкой на спам"""
+        """Предсказание группы, эксперта и метки с проверкой на спам и уверенность"""
         
         # 1. Проверка на спам перед предсказанием
         is_spam, spam_message = self.spam_protector.is_spam(title, description)
@@ -85,7 +83,9 @@ class ModelManager:
                 "label_confidence": 0.0,
                 "is_spam": True,
                 "spam_message": spam_message,
-                "message": "Запрос заблокирован спам-фильтром"
+                "message": "Запрос заблокирован спам-фильтром",
+                "needs_moderation": True,
+                "moderation_reason": "Обнаружен спам"
             }
         
         # 2. Проверка, обучена ли модель
@@ -113,7 +113,31 @@ class ModelManager:
             
             confidence = min(group_confidence, expert_confidence, label_confidence)
             
-            return {
+            # 3. Проверка уверенности модели
+            needs_moderation = False
+            moderation_reason = ""
+            
+            if confidence < self.confidence_threshold:
+                needs_moderation = True
+                if confidence < 0.1:
+                    moderation_reason = "Низкая уверенность модели: возможная опечатка или бессмысленный запрос"
+                else:
+                    moderation_reason = f"Низкая уверенность модели ({confidence:.1%}) - требуется проверка человеком"
+            
+            # 4. Проверка отдельных компонентов на низкую уверенность
+            low_confidence_components = []
+            if group_confidence < self.confidence_threshold:
+                low_confidence_components.append("группа")
+            if expert_confidence < self.confidence_threshold:
+                low_confidence_components.append("эксперт")
+            if label_confidence < self.confidence_threshold:
+                low_confidence_components.append("метка")
+            
+            if low_confidence_components and not needs_moderation:
+                needs_moderation = True
+                moderation_reason = f"Низкая уверенность в определении: {', '.join(low_confidence_components)}"
+            
+            result = {
                 "group": group,
                 "expert": expert,
                 "label": label,
@@ -121,8 +145,13 @@ class ModelManager:
                 "group_confidence": round(group_confidence, 3),
                 "expert_confidence": round(expert_confidence, 3),
                 "label_confidence": round(label_confidence, 3),
-                "is_spam": False
+                "is_spam": False,
+                "needs_moderation": needs_moderation,
+                "moderation_reason": moderation_reason
             }
+            
+            return result
+            
         except Exception as e:
             print(f"❌ Ошибка предсказания: {e}")
             return self._fallback_prediction(title, description)
@@ -139,8 +168,20 @@ class ModelManager:
             "label_confidence": 0.1,
             "fallback": True,
             "is_spam": False,
+            "needs_moderation": True,
+            "moderation_reason": "Модель не обучена - требуется ручная проверка",
             "message": "Модель не обучена. Загрузите данные через /load_excel"
         }
+    
+    def set_confidence_threshold(self, threshold):
+        """Установка порога уверенности"""
+        if 0 <= threshold <= 1:
+            self.confidence_threshold = threshold
+            print(f"✅ Порог уверенности установлен: {threshold:.1%}")
+            return True
+        else:
+            print("❌ Порог уверенности должен быть между 0 и 1")
+            return False
     
     def save_model(self, folder_path="model"):
         """Сохранение модели и данных"""
@@ -154,6 +195,12 @@ class ModelManager:
             joblib.dump(self.group_classifier, os.path.join(folder_path, "group_classifier.joblib"))
             joblib.dump(self.expert_classifier, os.path.join(folder_path, "expert_classifier.joblib"))
             joblib.dump(self.label_classifier, os.path.join(folder_path, "label_classifier.joblib"))
+            
+            # Сохраняем порог уверенности
+            config = {
+                'confidence_threshold': self.confidence_threshold
+            }
+            joblib.dump(config, os.path.join(folder_path, "config.joblib"))
             
             print(f"💾 Модель сохранена в папку {folder_path}")
             return True
@@ -172,13 +219,22 @@ class ModelManager:
             self.expert_classifier = joblib.load(os.path.join(folder_path, "expert_classifier.joblib"))
             self.label_classifier = joblib.load(os.path.join(folder_path, "label_classifier.joblib"))
             
+            # Загружаем порог уверенности
+            try:
+                config = joblib.load(os.path.join(folder_path, "config.joblib"))
+                self.confidence_threshold = config.get('confidence_threshold', 0.25)
+            except:
+                self.confidence_threshold = 0.25
+            
             self.is_trained = True
             print(f"📂 Модель загружена из папки {folder_path}")
+            print(f"📊 Порог уверенности: {self.confidence_threshold:.1%}")
             return True
         except Exception as e:
             print(f"❌ Ошибка загрузки модели: {e}")
             return False
 
+    # Остальные методы остаются без изменений...
     def clear_model(self, folder_path="model"):
         """Очистка модели - удаление всех файлов"""
         try:
@@ -186,7 +242,6 @@ class ModelManager:
                 print(f"📭 Папка {folder_path} не существует")
                 return True
                 
-            # Удаляем все файлы в папке модели
             files = glob.glob(os.path.join(folder_path, "*"))
             for file in files:
                 try:
@@ -195,7 +250,6 @@ class ModelManager:
                 except Exception as e:
                     print(f"⚠️ Не удалось удалить файл {file}: {e}")
             
-            # Сбрасываем состояние модели
             self.vectorizer = TfidfVectorizer(max_features=1500, stop_words=['и', 'в', 'на', 'с', 'по', 'для', 'за', 'к'])
             self.group_encoder = LabelEncoder()
             self.expert_encoder = LabelEncoder()
@@ -205,13 +259,13 @@ class ModelManager:
             self.expert_classifier = None
             self.label_classifier = None
             
-            # Очищаем данные
             self.data_loader.historical_data = []
             self.data_loader.groups = set()
             self.data_loader.experts = set()
             self.data_loader.labels = set()
             
             self.is_trained = False
+            self.confidence_threshold = 0.25
             
             print(f"🧹 Модель полностью очищена. Удалено {len(files)} файлов.")
             return True
@@ -241,7 +295,8 @@ class ModelManager:
         if not self.is_trained:
             return {
                 "is_trained": False,
-                "message": "Модель не обучена"
+                "message": "Модель не обучена",
+                "confidence_threshold": self.confidence_threshold
             }
         
         return {
@@ -251,5 +306,6 @@ class ModelManager:
             "labels_count": len(self.label_encoder.classes_),
             "groups": self.group_encoder.classes_.tolist(),
             "experts": self.expert_encoder.classes_.tolist(),
-            "labels": self.label_encoder.classes_.tolist()
+            "labels": self.label_encoder.classes_.tolist(),
+            "confidence_threshold": self.confidence_threshold
         }
