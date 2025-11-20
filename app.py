@@ -254,8 +254,6 @@ HTML_INTERFACE = """
                 
                 <div class="admin-buttons">
                     <button class="btn-success" onclick="loadExcel()">📥 Загрузить данные из Excel</button>
-                    <button onclick="saveModel()">💾 Сохранить модель</button>
-                    <button onclick="loadModel()">📂 Загрузить модель</button>
                     <button onclick="getStats()">📊 Обновить статистику</button>
                     <button class="btn-danger" onclick="clearModel()">🧹 Очистить модель</button>
                 </div>
