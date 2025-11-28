@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMAP AI - Классификация заявок</title>
+    <title>SMAX AI - Классификация заявок</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -165,7 +165,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 SMAP AI</h1>
+            <h1>🤖 SMAX AI</h1>
             <p>Автоматическая классификация заявок</p>
         </div>
         
@@ -244,9 +244,8 @@
                 
                 <div class="admin-buttons">
                     <button class="btn-success" onclick="loadExcel()">📥 Загрузить данные из Excel</button>
-                    <button onclick="saveModel()">💾 Сохранить модель</button>
-                    <button onclick="loadModel()">📂 Загрузить модель</button>
                     <button onclick="getStats()">📊 Обновить статистику</button>
+                    <button class="btn-danger" onclick="clearModel()">🧹 Очистить модель</button>
                 </div>
             </div>
         </div>
@@ -279,25 +278,55 @@
                 const prediction = data.prediction;
                 const resultsDiv = document.getElementById('predictionResults');
                 
-                let confidenceClass = 'low';
-                if (prediction.confidence > 0.7) confidenceClass = 'high';
-                else if (prediction.confidence > 0.4) confidenceClass = 'medium';
-                
-                resultsDiv.innerHTML = `
-                    <div class="result-item">
-                        <strong>👥 Группа:</strong> ${prediction.group}
-                        <span class="confidence ${confidenceClass}">${Math.round(prediction.confidence * 100)}%</span>
-                    </div>
-                    <div class="result-item">
-                        <strong>👨‍💻 Эксперт:</strong> ${prediction.expert}
-                        <span class="confidence ${confidenceClass}">${Math.round(prediction.expert_confidence * 100)}%</span>
-                    </div>
-                    <div class="result-item">
-                        <strong>🏷️ Метка:</strong> ${prediction.label}
-                        <span class="confidence ${confidenceClass}">${Math.round(prediction.label_confidence * 100)}%</span>
-                    </div>
-                    ${prediction.fallback ? '<div style="color: #e74c3c; margin-top: 10px;">⚠️ ' + prediction.message + '</div>' : ''}
-                `;
+                // Проверка на спам
+                if (prediction.is_spam) {
+                    resultsDiv.innerHTML = `
+                        <div style="color: #e74c3c; text-align: center; padding: 20px;">
+                            <h3>🚫 ЗАПРОС ЗАБЛОКИРОВАН</h3>
+                            <p><strong>Причина:</strong> ${prediction.spam_message || prediction.message}</p>
+                            <p>Пожалуйста, опишите вашу проблему более конкретно.</p>
+                        </div>
+                    `;
+                } else if (prediction.fallback) {
+                    // Модель не обучена
+                    resultsDiv.innerHTML = `
+                        <div style="color: #f39c12; text-align: center; padding: 20px;">
+                            <h3>⚠️ МОДЕЛЬ НЕ ОБУЧЕНА</h3>
+                            <p>${prediction.message}</p>
+                        </div>
+                    `;
+                } else {
+                    // Нормальный результат
+                    let confidenceClass = 'low';
+                    if (prediction.confidence > 0.7) confidenceClass = 'high';
+                    else if (prediction.confidence > 0.4) confidenceClass = 'medium';
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="result-item">
+                            <strong>👥 Группа:</strong> ${prediction.group}
+                            <span class="confidence ${confidenceClass}">${Math.round(prediction.confidence * 100)}%</span>
+                        </div>
+                        <div class="result-item">
+                            <strong>👨‍💻 Эксперт:</strong> ${prediction.expert}
+                            <span class="confidence ${confidenceClass}">${Math.round(prediction.expert_confidence * 100)}%</span>
+                        </div>
+                        <div class="result-item">
+                            <strong>🏷️ Метка:</strong> ${prediction.label}
+                            <span class="confidence ${confidenceClass}">${Math.round(prediction.label_confidence * 100)}%</span>
+                        </div>
+                    `;
+
+                    // Проверка на необходимость модерации
+                    if (prediction.needs_moderation) {
+                        resultsDiv.innerHTML += `
+                            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin-top: 15px;">
+                                <h4>⚠️ ТРЕБУЕТСЯ МОДЕРАЦИЯ</h4>
+                                <p><strong>Причина:</strong> ${prediction.moderation_reason}</p>
+                                <p>Эта заявка будет проверена человеком перед назначением.</p>
+                            </div>
+                        `;
+                    }
+                }
                 
                 document.getElementById('results').style.display = 'block';
             } else {
@@ -358,6 +387,25 @@
             labelsList.innerHTML = data.labels.map(label => 
                 `<div class="data-item">${label}</div>`
             ).join('') || '<div class="data-item">Нет данных</div>';
+        }
+
+        async function clearModel() {
+            if (!confirm('⚠️ ВНИМАНИЕ! Это удалит все данные модели. Продолжить?')) {
+                return;
+            }
+            
+            const response = await fetch('/clear_model');
+            const data = await response.json();
+            alert(data.message);
+            
+            // Обновляем интерфейс после очистки
+            refreshData();
+            getStats();
+            
+            // Очищаем результаты предсказания
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
         }
         
         // Загружаем данные при старте
