@@ -35,7 +35,7 @@ def predict():
 
 @app.route('/load_excel', methods=['GET'])
 def load_excel():
-    """Загрузка данных из Excel файлов"""
+    """Загрузка данных из Excel файлов (только новых)"""
     try:
         success = model_manager.load_and_train("Выгрузка")
         
@@ -46,12 +46,41 @@ def load_excel():
                 "status": "success",
                 "message": "Данные успешно загружены и модель обучена",
                 "records_loaded": model_manager.get_data_stats()["total_records"],
-                "model_trained": model_manager.is_trained
+                "model_trained": model_manager.is_trained,
+                "loaded_files_info": model_manager.data_loader.get_loaded_files_info()
             })
         else:
             return jsonify({
                 "status": "error",
                 "message": "Не удалось загрузить данные из Excel файлов"
+            }), 400
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/force_reload_excel', methods=['GET'])
+def force_reload_excel():
+    """Принудительная перезагрузка всех Excel файлов"""
+    try:
+        # Помечаем все файлы для перезагрузки
+        model_manager.data_loader.force_reload_all("Выгрузка")
+        
+        success = model_manager.load_and_train("Выгрузка")
+        
+        if success:
+            model_manager.save_model()
+            
+            return jsonify({
+                "status": "success",
+                "message": "Данные принудительно перезагружены и модель переобучена",
+                "records_loaded": model_manager.get_data_stats()["total_records"],
+                "model_trained": model_manager.is_trained,
+                "loaded_files_info": model_manager.data_loader.get_loaded_files_info()
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Не удалось перезагрузить данные из Excel файлов"
             }), 400
         
     except Exception as e:
@@ -85,6 +114,7 @@ def load_model():
 def stats():
     """Статистика модели"""
     stats = model_manager.get_data_stats()
+    stats["loaded_files_info"] = model_manager.data_loader.get_loaded_files_info()
     return jsonify(stats)
 
 @app.route('/get_data', methods=['GET'])
@@ -101,7 +131,8 @@ def health():
     return jsonify({
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "model_status": "trained" if model_manager.is_trained else "not_trained"
+        "model_status": "trained" if model_manager.is_trained else "not_trained",
+        "loaded_files_info": model_manager.data_loader.get_loaded_files_info()
     })
 
 @app.route('/clear_model', methods=['GET'])
@@ -129,6 +160,7 @@ if __name__ == '__main__':
     print("   GET / - Веб-интерфейс")
     print("   POST /predict - Предсказание для заявки")
     print("   GET /load_excel - Загрузка данных из Excel")
+    print("   GET /force_reload_excel - Принудительная перезагрузка всех Excel файлов")
     print("   GET /save_model - Сохранение модели")
     print("   GET /load_model - Загрузка модели")
     print("   GET /stats - Статистика")
